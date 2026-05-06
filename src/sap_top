@@ -1,0 +1,145 @@
+module sap_top(
+    input  wire       clk,
+    input  wire       clr,
+    output wire [7:0] out_bus  // output from OUT register
+);
+
+    // ----------------------
+    // Internal buses
+    // ----------------------
+    wire [7:0] bus;
+    wire [7:0] acc_out;
+    wire [7:0] add_sub_out;
+    wire [7:0] b_out;
+    wire [7:0] out_reg_out;
+    wire [3:0] ir_addr_out;
+    wire [3:0] ir_opcode_out;
+    wire [3:0] mar_addr_out;
+    wire [7:0] ram_out;
+
+    // ----------------------
+    // Control signals from controller
+    // ----------------------
+    wire Cp, Ep, Lm, CE, Li, Ei, La, Ea, Su, Eu, Lb, Lo, HLT;
+
+    // ----------------------
+    // Instantiate Controller
+    // ----------------------
+    Controller ctrl(
+        .clk(clk),
+        .clr(clr),
+        .inst_in(ir_opcode_out),
+        .Cp(Cp),
+        .Ep(Ep),
+        .Lm(Lm),
+        .CE(CE),
+        .Li(Li),
+        .Ei(Ei),
+        .La(La),
+        .Ea(Ea),
+        .Su(Su),
+        .Eu(Eu),
+        .Lb(Lb),
+        .Lo(Lo),
+        .HLT(HLT)
+    );
+
+    // ----------------------
+    // Program Counter
+    // ----------------------
+    programcounter pc(
+        .C_P(Cp),
+        .nCLK(clk),      // assuming active-low clock not needed, adjust if required
+        .nCLR(clr),
+        .E_P(Ep),
+        .pc_bus_in(bus[3:0]),
+        .pc_bus_out(bus)
+    );
+
+    // ----------------------
+    // MAR
+    // ----------------------
+    mar mar_inst(
+        .LM(Lm),
+        .CLK(clk),
+        .bus_in(bus[3:0]),
+        .mar_addr_bus_out(mar_addr_out)
+    );
+
+    // ----------------------
+    // Memory
+    // ----------------------
+    mem ram_inst(
+        .mar_addr(mar_addr_out),
+        .CE(CE),
+        .ram_bus_out(ram_out)
+    );
+
+    // ----------------------
+    // Instruction Register
+    // ----------------------
+    instruction_register ir(
+        .LI(Li),
+        .CLK(clk),
+        .CLR(clr),
+        .EI(Ei),
+        .ir_bus_in(ram_out),
+        .ir_addr_out(ir_addr_out),
+        .ir_opcode_out(ir_opcode_out)
+    );
+
+    // ----------------------
+    // Accumulator
+    // ----------------------
+    accumulator acc(
+        .LA(La),
+        .CLK(clk),
+        .EA(Ea),
+        .acc_bus_in(bus),
+        .acc_bus_out(acc_out),
+        .add_sub_input(b_out)  // could also connect differently if needed
+    );
+
+    // ----------------------
+    // B register
+    // ----------------------
+    b_register breg(
+        .LB(Lb),
+        .CLK(clk),
+        .b_bus_in(bus),
+        .b_add_sum_in(b_out)
+    );
+
+    // ----------------------
+    // Add/Sub unit
+    // ----------------------
+    add_sub alu(
+        .A(acc_out),
+        .B(b_out),
+        .SU(Su),
+        .EU(Eu),
+        .ADD_SUB_bus_out(add_sub_out)
+    );
+
+    // ----------------------
+    // OUT register
+    // ----------------------
+    outregister outreg(
+        .LO(Lo),
+        .CLK(clk),
+        .out_bus_in(bus),
+        .out_reg_bus_out(out_reg_out)
+    );
+
+    // ----------------------
+    // Bus multiplexing (simple priority example)
+    // ----------------------
+    assign bus = Eu ? add_sub_out :
+                 Ea ? acc_out :
+                 Lo ? out_reg_out :
+                 8'bz;
+
+    // Connect top-level output
+    assign out_bus = out_reg_out;
+
+endmodule
