@@ -1,4 +1,4 @@
-module top(
+module tt_um_sap_alexanderholden_1(
     input wire clk,
     input wire clr
 );
